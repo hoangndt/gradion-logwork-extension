@@ -1,6 +1,50 @@
 const JIRA_HOST = 'emma-sleep.atlassian.net';
 const KEY_SHAPE = /^[A-Z][A-Z0-9]+-\d+$/;
 
+const API_ENTRIES = 'https://ts-prod.gradion.com/api/entries';
+const CLASSIFICATION_ID = '3832f75f-64c0-4fd7-8cc5-24593382c5af';
+const MORNING = { start: '09:00', end: '12:00' };
+
+function splitDuration(totalHours) {
+  if (totalHours <= 0) throw new Error('totalHours must be > 0');
+  if (totalHours <= 3) {
+    const endMinutes = 9 * 60 + totalHours * 60;
+    const h = Math.floor(endMinutes / 60);
+    const m = Math.round(endMinutes % 60);
+    return [{ start: '09:00', end: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}` }];
+  }
+  const afternoonMinutes = 13 * 60 + 30 + (totalHours - 3) * 60;
+  const h = Math.floor(afternoonMinutes / 60);
+  const m = Math.round(afternoonMinutes % 60);
+  const afternoonEnd = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  return [
+    { start: '09:00', end: '12:00' },
+    { start: '13:30', end: afternoonEnd },
+  ];
+}
+
+function buildEntry(date, block, desc, task) {
+  return {
+    date,
+    startTime: block.start,
+    endTime: block.end,
+    classificationId: CLASSIFICATION_ID,
+    description: desc,
+    task,
+  };
+}
+
+async function postEntry(payload, token) {
+  return fetch(API_ENTRIES, {
+    method: 'POST',
+    headers: {
+      'Authorization': token,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 function parseJiraKey(url) {
   if (typeof url !== 'string') return null;
   let u;
@@ -17,7 +61,13 @@ function parseJiraKey(url) {
   return null;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const { token } = await chrome.storage.local.get('token');
+  if (!token) {
+    chrome.tabs.create({ url: 'https://workspace.gradion.com/app/timesheet' });
+    return;
+  }
+
   const dateInput = document.getElementById('date-input');
   const hoursInput = document.getElementById('hours-input');
   const taskInput = document.getElementById('task-input');
@@ -33,6 +83,47 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const descriptionInput = document.getElementById('description-input');
+
+  const submitBtn = document.getElementById('submit-btn');
+  const messageArea = document.getElementById('message-area');
+
+  if (submitBtn) {
+    submitBtn.addEventListener('click', async () => {
+      const date = dateInput ? dateInput.value : '';
+      const hours = hoursInput ? parseFloat(hoursInput.value) : NaN;
+      const task = taskInput ? taskInput.value : '';
+      const description = descriptionInput ? descriptionInput.value : '';
+
+      const { token } = await chrome.storage.local.get('token');
+      if (!token) {
+        messageArea.textContent = 'No auth token found. Please visit Gradion to capture your session.';
+        return;
+      }
+
+      if (isNaN(hours) || hours <= 0) {
+        messageArea.textContent = 'Please enter a valid number of hours greater than 0.';
+        return;
+      }
+
+      messageArea.textContent = '';
+      const blocks = splitDuration(hours);
+
+      for (const block of blocks) {
+        const res = await postEntry(buildEntry(date, block, description, task), token);
+        if (!res.ok) {
+          let msg = 'Submit failed. Please try again.';
+          try {
+            const data = await res.json();
+            if (data && data.error) msg = data.error;
+          } catch {}
+          messageArea.textContent = msg;
+          return;
+        }
+      }
+
+      messageArea.textContent = 'Logwork submitted successfully.';
+    });
+  }
 
   chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
     const key = parseJiraKey(tab && tab.url);
