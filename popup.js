@@ -3,23 +3,42 @@ const KEY_SHAPE = /^[A-Z][A-Z0-9]+-\d+$/;
 
 const API_ENTRIES = 'https://ts-prod.gradion.com/api/entries';
 const CLASSIFICATION_ID = '3832f75f-64c0-4fd7-8cc5-24593382c5af';
-const MORNING = { start: '09:00', end: '12:00' };
+const LUNCH = { start: '12:00', end: '13:00' };
+const LUNCH_START = 720;  // 12:00 in minutes
+const LUNCH_END = 780;    // 13:00 in minutes
+const LUNCH_LEN = 60;
 
-function splitDuration(totalHours) {
-  if (totalHours <= 0) throw new Error('totalHours must be > 0');
-  if (totalHours <= 3) {
-    const endMinutes = 9 * 60 + totalHours * 60;
-    const h = Math.floor(endMinutes / 60);
-    const m = Math.round(endMinutes % 60);
-    return [{ start: '09:00', end: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}` }];
+function toMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function toHHMM(min) {
+  min = Math.min(min, 1439);
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function computeEndTime(startTime, totalHours) {
+  const start = toMinutes(startTime);
+  const worked = Math.round(totalHours * 60);
+  let end = start + worked;
+  if (start < LUNCH_END && end > LUNCH_START) {
+    end += LUNCH_LEN;
   }
-  const afternoonMinutes = 13 * 60 + 30 + (totalHours - 3) * 60;
-  const h = Math.floor(afternoonMinutes / 60);
-  const m = Math.round(afternoonMinutes % 60);
-  const afternoonEnd = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  return toHHMM(end);
+}
+
+function buildBlocks(startTime, endTime) {
+  const start = toMinutes(startTime);
+  const end = toMinutes(endTime);
+  if (start >= LUNCH_END || end <= LUNCH_START) {
+    return [{ start: startTime, end: endTime }];
+  }
   return [
-    { start: '09:00', end: '12:00' },
-    { start: '13:30', end: afternoonEnd },
+    { start: startTime, end: LUNCH.start },
+    { start: LUNCH.end, end: endTime },
   ];
 }
 
@@ -158,6 +177,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const dateInput = document.getElementById('date-input');
   const hoursInput = document.getElementById('hours-input');
+  const startInput = document.getElementById('start-input');
+  const endInput = document.getElementById('end-input');
   const taskInput = document.getElementById('task-input');
 
   if (dateInput) {
@@ -170,6 +191,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     hoursInput.value = '8';
   }
 
+  if (startInput) {
+    startInput.value = '09:00';
+  }
+
+  function updateEndTime() {
+    if (!startInput || !hoursInput || !endInput) return;
+    const hours = parseFloat(hoursInput.value);
+    if (!isNaN(hours) && hours > 0 && startInput.value) {
+      endInput.value = computeEndTime(startInput.value, hours);
+    }
+  }
+
+  updateEndTime();
+
+  if (hoursInput) hoursInput.addEventListener('input', updateEndTime);
+  if (startInput) startInput.addEventListener('input', updateEndTime);
+
   const descriptionInput = document.getElementById('description-input');
 
   const submitBtn = document.getElementById('submit-btn');
@@ -179,6 +217,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     submitBtn.addEventListener('click', async () => {
       const date = dateInput ? dateInput.value : '';
       const hours = hoursInput ? parseFloat(hoursInput.value) : NaN;
+      const start = startInput ? startInput.value : '';
+      const end = endInput ? endInput.value : '';
       const task = taskInput ? taskInput.value : '';
       const description = descriptionInput ? descriptionInput.value : '';
 
@@ -193,8 +233,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
+      if (!start) {
+        messageArea.textContent = 'Please enter a valid start time.';
+        return;
+      }
+
+      const startMin = toMinutes(start);
+      if (startMin >= LUNCH_START && startMin < LUNCH_END) {
+        messageArea.textContent = 'Start time cannot be within the lunch break (12:00–13:00).';
+        return;
+      }
+
       messageArea.textContent = '';
-      const blocks = splitDuration(hours);
+      const blocks = buildBlocks(start, end);
 
       for (const block of blocks) {
         const res = await postEntry(buildEntry(date, block, description, task), token);
