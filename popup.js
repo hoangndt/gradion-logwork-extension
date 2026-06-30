@@ -30,16 +30,27 @@ function computeEndTime(startTime, totalHours) {
   return toHHMM(end);
 }
 
+const MAX_BLOCK_MINUTES = 240; // 4 hours
+
+function chunkBlock(startTime, endTime) {
+  const blocks = [];
+  let cur = toMinutes(startTime);
+  const end = toMinutes(endTime);
+  while (cur < end) {
+    const next = Math.min(cur + MAX_BLOCK_MINUTES, end);
+    blocks.push({ start: toHHMM(cur), end: toHHMM(next) });
+    cur = next;
+  }
+  return blocks;
+}
+
 function buildBlocks(startTime, endTime) {
   const start = toMinutes(startTime);
   const end = toMinutes(endTime);
-  if (start >= LUNCH_END || end <= LUNCH_START) {
-    return [{ start: startTime, end: endTime }];
-  }
-  return [
-    { start: startTime, end: LUNCH.start },
-    { start: LUNCH.end, end: endTime },
-  ];
+  const lunchBlocks = (start >= LUNCH_END || end <= LUNCH_START)
+    ? [{ start: startTime, end: endTime }]
+    : [{ start: startTime, end: LUNCH.start }, { start: LUNCH.end, end: endTime }];
+  return lunchBlocks.flatMap(b => chunkBlock(b.start, b.end));
 }
 
 function buildEntry(date, block, desc, task) {
