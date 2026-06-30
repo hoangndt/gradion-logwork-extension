@@ -61,12 +61,100 @@ function parseJiraKey(url) {
   return null;
 }
 
+function currentMonthRange() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return {
+    dateFrom: `${year}-${month}-01`,
+    dateTo: `${year}-${month}-${day}`,
+  };
+}
+
+function getDuration(entry) {
+  if (entry.durationMinutes != null) {
+    const h = Math.round((entry.durationMinutes / 60) * 10) / 10;
+    return `${h}h`;
+  }
+  if (entry.startTime && entry.endTime) {
+    const [sh, sm] = entry.startTime.split(':').map(Number);
+    const [eh, em] = entry.endTime.split(':').map(Number);
+    const mins = (eh * 60 + em) - (sh * 60 + sm);
+    const h = Math.round((mins / 60) * 10) / 10;
+    return `${h}h`;
+  }
+  return '—';
+}
+
+async function fetchEntries(token) {
+  const { dateFrom, dateTo } = currentMonthRange();
+  const params = new URLSearchParams({ limit: 20, offset: 0, dateFrom, dateTo });
+  const url = `${API_ENTRIES}?${params}`;
+  try {
+    let res;
+    try {
+      res = await fetch(url, { headers: { Authorization: token } });
+    } catch {
+      const msg = await chrome.runtime.sendMessage({ type: 'GET_ENTRIES', url, token });
+      if (!msg || msg.error) return [];
+      return msg.entries || [];
+    }
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : (data.entries || []);
+  } catch {
+    return [];
+  }
+}
+
+function renderEntries(entries) {
+  const list = document.getElementById('entries-list');
+  if (!list) return;
+  list.textContent = '';
+
+  if (!entries.length) {
+    const li = document.createElement('li');
+    li.className = 'entry-empty';
+    li.textContent = 'No entries this month';
+    list.appendChild(li);
+    return;
+  }
+
+  for (const entry of entries) {
+    const li = document.createElement('li');
+    li.className = 'entry-row';
+
+    const date = entry.date || '';
+    const start = entry.startTime || '';
+    const end = entry.endTime || '';
+    const timeRange = start && end ? `${start}–${end}` : (start || end || '');
+    const duration = getDuration(entry);
+    const task = entry.task || '';
+    const description = entry.description || '';
+    const status = entry.status || '';
+
+    const parts = [date, timeRange, duration, task, description, status].filter(Boolean);
+    li.textContent = parts.join(' · ');
+    list.appendChild(li);
+  }
+}
+
+async function refreshEntries() {
+  const { token } = await chrome.storage.local.get('token');
+  if (!token) return;
+  const entries = await fetchEntries(token);
+  renderEntries(entries);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   const { token } = await chrome.storage.local.get('token');
   if (!token) {
     chrome.tabs.create({ url: 'https://workspace.gradion.com/app/timesheet' });
     return;
   }
+
+  refreshEntries();
 
   const dateInput = document.getElementById('date-input');
   const hoursInput = document.getElementById('hours-input');
@@ -122,6 +210,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       messageArea.textContent = 'Logwork submitted successfully.';
+      refreshEntries();
     });
   }
 

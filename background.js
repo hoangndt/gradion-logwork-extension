@@ -1,5 +1,20 @@
 chrome.runtime.onInstalled.addListener(() => {});
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'GET_ENTRIES') {
+    fetch(message.url, { headers: { Authorization: message.token } })
+      .then(res => {
+        if (!res.ok) { sendResponse({ entries: [] }); return; }
+        return res.json().then(data => {
+          const entries = Array.isArray(data) ? data : (data.entries || []);
+          sendResponse({ entries });
+        });
+      })
+      .catch(() => sendResponse({ entries: [] }));
+    return true;
+  }
+});
+
 chrome.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
     const headers = details.requestHeaders || [];
