@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Gradion Logwork",
+  "version": "0.1.0",
+  "description": "Log work to Gradion Timesheet from Jira.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Gradion Logwork",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["webRequest", "storage", "tabs", "scripting"],
+  "host_permissions": [
+    "https://ts-prod.gradion.com/*",
+    "https://workspace.gradion.com/*",
+    "https://emma-sleep.atlassian.net/*"
+  ]
+}
