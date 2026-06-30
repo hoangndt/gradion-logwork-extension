@@ -1,1 +1,61 @@
-/* popup stub — styles added in US-003 */
+/* popup styles */
+body {
+  font-family: sans-serif;
+  font-size: 14px;
+  min-width: 300px;
+  padding: 12px;
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+}
+
+.field label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.field input,
+.field textarea {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.actions button {
+  padding: 6px 12px;
+  cursor: pointer;
+  border: 1px solid #888;
+  border-radius: 4px;
+  background: #f5f5f5;
+  font-size: 13px;
+}
+
+.status-row {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+#message-area {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+#entries-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
